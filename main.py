@@ -9,6 +9,7 @@ from cli import (
     set_object_access_policy,
     create_bucket_policy,
     read_bucket_policy,
+    delete_file,
 )
 
 app = typer.Typer()
@@ -65,6 +66,19 @@ def read_policy(bucket_name: str):
     """Read the current bucket policy"""
     client = init_client()
     read_bucket_policy(client, bucket_name)
+
+@app.command()
+def delete_bucket_file(bucket_name: str, file_key: str,delete: bool = typer.Option(False, "--del", help="Flag to confirm deletion")):
+    if not delete:
+        typer.echo("Use --del flag to confirm deletion")
+        raise typer.Exit(1)
+
+    client = init_client()
+    if delete_file(client, bucket_name, file_key):
+        typer.echo(f"Successfully deleted {file_key} from {bucket_name}")
+    else:
+        typer.echo(f"Failed to delete {file_key}")
+        raise typer.Exit(1)
 
 if __name__ == "__main__":
     app()

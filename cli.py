@@ -258,3 +258,13 @@ def set_lifecycle_policy(s3_client, bucket, prefix='', days=120):
     except ClientError as err:
         print(f"set_lifecycle_policy failed: {err}")
         return False
+
+
+def delete_file(client, bucket_name, file_name):
+    """Delete a file from the S3 bucket."""
+    try:
+        client.delete_object(Bucket=bucket_name, Key=file_name)
+        return True
+    except Exception as e:
+        print(f"Error deleting file: {e}")
+        return False
