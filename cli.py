@@ -1,10 +1,14 @@
-import boto3
-from os import getenv
-from dotenv import load_dotenv
-from botocore.exceptions import ClientError
+
 import json
-from hashlib import md5
-from time import localtime
+import os
+import math
+import mimetypes
+from threading import Lock
+from concurrent.futures import ThreadPoolExecutor
+from botocore.exceptions import ClientError
+import boto3
+from dotenv import load_dotenv
+from os import getenv
 
 load_dotenv()
 
@@ -144,4 +148,113 @@ def read_bucket_policy(aws_s3_client, bucket_name):
         print(policy_str)
     except ClientError as e:
         print(e)
+        return False
+
+def _get_content_type(path):
+    return mimetypes.guess_type(path)[0]
+
+
+def upload_small_file(s3_client, bucket, path, object_name=None):
+    object_name = object_name or os.path.basename(path)
+    extra_args = {}
+    if (ctype := _get_content_type(path)):
+        extra_args['ContentType'] = ctype
+
+
+    try:
+        s3_client.upload_file(
+            Filename=path,
+            Bucket=bucket,
+            Key=object_name,
+            ExtraArgs=extra_args
+        )
+        return True
+    except ClientError as err:
+        print(f"upload_small_file failed: {err}")
+        return False
+
+
+def upload_large_file(s3_client, bucket, path, object_name=None, chunk_size=10 * 1024 * 1024):
+    object_name = object_name or os.path.basename(path)
+    size = os.path.getsize(path)
+
+
+    if size < 100 * 1024 * 1024:
+        return upload_small_file(s3_client, bucket, path, object_name)
+
+
+    content_type = _get_content_type(path) or 'application/octet-stream'
+
+
+    try:
+        multipart = s3_client.create_multipart_upload(
+            Bucket=bucket,
+            Key=object_name,
+            ContentType=content_type
+        )
+        upload_id = multipart['UploadId']
+        total_parts = math.ceil(size / chunk_size)
+        uploaded_parts = []
+        lock = Lock()
+
+
+        def _upload_part(part_number):
+            offset = (part_number - 1) * chunk_size
+            length = min(chunk_size, size - offset)
+            with open(path, 'rb') as f:
+                f.seek(offset)
+                data = f.read(length)
+            resp = s3_client.upload_part(
+                Bucket=bucket,
+                Key=object_name,
+                PartNumber=part_number,
+                UploadId=upload_id,
+                Body=data
+            )
+            with lock:
+                uploaded_parts.append({'PartNumber': part_number, 'ETag': resp['ETag']})
+
+
+        with ThreadPoolExecutor(max_workers=min(4, total_parts)) as executor:
+            executor.map(_upload_part, range(1, total_parts + 1))
+
+
+        s3_client.complete_multipart_upload(
+            Bucket=bucket,
+            Key=object_name,
+            UploadId=upload_id,
+            MultipartUpload={'Parts': sorted(uploaded_parts, key=lambda p: p['PartNumber'])}
+        )
+        return True
+
+
+    except Exception as err:
+        print(f"upload_large_file failed: {err}")
+        if 'upload_id' in locals():
+            s3_client.abort_multipart_upload(
+                Bucket=bucket,
+                Key=object_name,
+                UploadId=upload_id
+            )
+        return False
+
+
+def set_lifecycle_policy(s3_client, bucket, prefix='', days=120):
+    rule = {
+        'ID': f'Delete after {days} days',
+        'Status': 'Enabled',
+        'Prefix': prefix,
+        'Expiration': {'Days': days}
+    }
+    config = {'Rules': [rule]}
+
+
+    try:
+        s3_client.put_bucket_lifecycle_configuration(
+            Bucket=bucket,
+            LifecycleConfiguration=config
+        )
+        return True
+    except ClientError as err:
+        print(f"set_lifecycle_policy failed: {err}")
         return False
