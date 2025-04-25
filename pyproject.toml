@@ -1,0 +1,19 @@
+[project]
+name = "aws-cli"
+version = "0.1.0"
+description = "aws cli tool"
+authors = [
+    {name = "Merab Kardava",email = "merab.kardava.1@btu.edu.ge"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "boto3 (>=1.38.3,<2.0.0)",
+    "python-dotenv (>=1.1.0,<2.0.0)",
+    "typer[all] (>=0.15.2,<0.16.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
