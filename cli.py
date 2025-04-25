@@ -306,3 +306,37 @@ def reupload_previous_version(client, bucket_name, file_name):
     except Exception as e:
         print("Error during reupload:", e)
         return False
+
+def organize_bucket_by_extension(client, bucket_name):
+    from collections import defaultdict
+
+    try:
+        response = client.list_objects_v2(Bucket=bucket_name)
+        contents = response.get("Contents", [])
+        moved_count = defaultdict(int)
+
+        for obj in contents:
+            key = obj["Key"]
+            if "/" in key:
+                continue
+
+            if "." not in key:
+                continue
+
+            extension = key.split(".")[-1]
+            new_key = f"{extension}/{key}"
+
+            client.copy_object(
+                Bucket=bucket_name,
+                CopySource={"Bucket": bucket_name, "Key": key},
+                Key=new_key
+            )
+
+            client.delete_object(Bucket=bucket_name, Key=key)
+
+            moved_count[extension] += 1
+
+        return dict(moved_count)
+
+    except Exception as e:
+        return {"error": str(e)}

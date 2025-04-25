@@ -9,7 +9,7 @@ from cli import (
     set_object_access_policy,
     create_bucket_policy,
     read_bucket_policy,
-    delete_file, get_file_versions, reupload_previous_version,
+    delete_file, get_file_versions, reupload_previous_version, organize_bucket_by_extension,
 )
 
 app = typer.Typer()
@@ -114,6 +114,24 @@ def reupload_previous(bucket_name, file_name, reupload=False):
         typer.echo("Re-uploaded previous version." if success else "Failed to re-upload.")
     else:
         typer.echo("Use --reupload to re-upload the previous version.")
+
+
+@app.command()
+def organize(bucket_name, organize: bool = False):
+    """Organize files by extension into folders and count movements"""
+    if organize:
+        client = init_client()
+        result = organize_bucket_by_extension(client, bucket_name)
+
+        if "error" in result:
+            typer.echo(f"Error: {result['error']}")
+        else:
+            typer.echo("Moved files by extension:")
+            for ext, count in result.items():
+                typer.echo(f"{ext} - {count}")
+    else:
+        typer.echo("Use --organize to trigger organization")
+
 
 
 
