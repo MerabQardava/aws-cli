@@ -268,3 +268,41 @@ def delete_file(client, bucket_name, file_name):
     except Exception as e:
         print(f"Error deleting file: {e}")
         return False
+
+def is_versioning_enabled(client, bucket_name):
+    """Check if versioning is enabled on the given bucket."""
+    try:
+        response = client.get_bucket_versioning(Bucket=bucket_name)
+        return response.get("Status", "Not enabled")
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def get_file_versions(client, bucket_name, file_name):
+    """Return a list of versions with timestamps for a given file."""
+    try:
+        response = client.list_object_versions(Bucket=bucket_name, Prefix=file_name)
+        return response.get("Versions", [])
+    except Exception as e:
+        print("Error:", e)
+        return []
+
+
+def reupload_previous_version(client, bucket_name, file_name):
+    """Re-upload the previous version of a file as a new version."""
+    try:
+        versions = get_file_versions(client, bucket_name, file_name)
+        if len(versions) < 2:
+            return False
+
+        previous_version = versions[1]
+        previous_version_id = previous_version["VersionId"]
+
+        obj = client.get_object(Bucket=bucket_name, Key=file_name, VersionId=previous_version_id)
+        content = obj["Body"].read()
+
+        client.put_object(Bucket=bucket_name, Key=file_name, Body=content)
+        return True
+    except Exception as e:
+        print("Error during reupload:", e)
+        return False

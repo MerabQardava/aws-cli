@@ -9,7 +9,7 @@ from cli import (
     set_object_access_policy,
     create_bucket_policy,
     read_bucket_policy,
-    delete_file,
+    delete_file, get_file_versions, reupload_previous_version,
 )
 
 app = typer.Typer()
@@ -79,6 +79,43 @@ def delete_bucket_file(bucket_name: str, file_key: str,delete: bool = typer.Opti
     else:
         typer.echo(f"Failed to delete {file_key}")
         raise typer.Exit(1)
+
+
+@app.command()
+def versioning_status(bucket_name: str, check: bool = False):
+    """Check if versioning is enabled for a bucket"""
+    if check:
+        client = init_client()
+        response = client.get_bucket_versioning(Bucket=bucket_name)
+        status = response.get("Status", "Not enabled")
+        typer.echo(f"Versioning status: {status}")
+    else:
+        typer.echo("Use --check to verify versioning status.")
+
+
+@app.command()
+def list_versions(bucket_name, file_name, show_versions=False):
+    """List versions of a file in a bucket"""
+    if show_versions:
+        client = init_client()
+        versions = get_file_versions(client, bucket_name, file_name)
+        typer.echo(f"Found {len(versions)} versions for {file_name}:\n")
+        for v in versions:
+            typer.echo(f"- VersionId: {v['VersionId']}, LastModified: {v['LastModified']}")
+    else:
+        typer.echo("Use --show-versions to display file versions.")
+
+@app.command()
+def reupload_previous(bucket_name, file_name, reupload=False):
+    """Re-upload the previous version of a file as the latest version"""
+    if reupload:
+        client = init_client()
+        success = reupload_previous_version(client, bucket_name, file_name)
+        typer.echo("Re-uploaded previous version." if success else "Failed to re-upload.")
+    else:
+        typer.echo("Use --reupload to re-upload the previous version.")
+
+
 
 if __name__ == "__main__":
     app()
