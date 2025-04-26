@@ -132,6 +132,39 @@ def organize(bucket_name, organize: bool = False):
     else:
         typer.echo("Use --organize to trigger organization")
 
+@app.command()
+def create_static_website_cmd(bucket_name: str, file_name: str):
+    client = init_client()
+
+    if not create_bucket(client, bucket_name):
+        typer.echo("Failed to create bucket")
+        raise typer.Exit(1)
+
+    try:
+        client.delete_public_access_block(
+            Bucket=bucket_name
+        )
+
+        website_configuration = {
+            'ErrorDocument': {'Key': 'error.html'},
+            'IndexDocument': {'Suffix': 'index.html'},
+        }
+        client.put_bucket_website(Bucket=bucket_name, WebsiteConfiguration=website_configuration)
+
+        client.put_bucket_policy(
+            Bucket=bucket_name,
+            Policy=generate_public_read_policy(bucket_name)
+        )
+
+        if upload_small_file(client, bucket_name, file_name):
+            typer.echo(f"Successfully configured static website hosting for {bucket_name}")
+            typer.echo(f"Website URL: http://{bucket_name}.s3-website-{client.meta.region_name}.amazonaws.com")
+        else:
+            typer.echo("Failed to upload file")
+
+    except ClientError as e:
+        typer.echo(f"Error configuring website: {e}")
+        raise typer.Exit(1)
 
 
 
